@@ -1,24 +1,28 @@
-// ========== Blog AI Chat ==========
+// ========== Blog AI Chat - Digital Twin ==========
 
 (function () {
-  // API key is base64 encoded, decoded at runtime
   const _k = ['c2stYWIwNDIwZThlMzA2NDU1Y2I3ZGM3ZjEyODViOGMwNDU='];
   const DEEPSEEK_API = 'https://api.deepseek.com/chat/completions';
   const POSTS_FILE = 'data/posts.json';
+  const SOUL_FILE = 'soul.md';
 
   let posts = [];
+  let soul = '';
   let chatHistory = [];
   let isOpen = false;
-  let isSettingsOpen = false;
 
   // ========== Init ==========
   async function initChat() {
-    // Load posts
     try {
-      const res = await fetch(POSTS_FILE);
-      posts = await res.json();
+      const [postsRes, soulRes] = await Promise.all([
+        fetch(POSTS_FILE),
+        fetch(SOUL_FILE)
+      ]);
+      posts = await postsRes.json();
+      soul = await soulRes.text();
     } catch (e) {
       posts = [];
+      soul = '你是杨轩的博客AI助手。';
     }
 
     injectHTML();
@@ -31,40 +35,38 @@
     css.href = 'static/css/chat.css';
     document.head.appendChild(css);
 
+    // Extract the intro line from soul.md
+    const introMatch = soul.match(/我是杨轩.*不是什么AI模型/);
+    const intro = introMatch ? introMatch[0] : '我就是杨轩本人，不是什么AI模型。';
+
     const html = `
-      <button class="chat-fab" id="chatFab" title="AI 助手">&#128172;</button>
+      <button class="chat-fab" id="chatFab" title="和我聊聊">&#128172;</button>
 
       <div class="chat-panel" id="chatPanel">
-        <div class="chat-header">
-          <div class="chat-header-info">
-            <span class="dot"></span>
-            <h3>AI 助手</h3>
-          </div>
+        <div class="chat-header" style="position:relative;">
+          <h3>问我的数字分身</h3>
           <div class="chat-header-actions">
-            <button onclick="ChatBot.toggleSettings()" title="设置">&#9881;</button>
             <button onclick="ChatBot.toggle()" title="关闭">&times;</button>
           </div>
         </div>
 
-        <div class="chat-settings" id="chatSettings">
-          <p class="hint" style="text-align:center;padding:1rem 0;">AI 助手已就绪</p>
-        </div>
-
         <div class="chat-messages" id="chatMessages">
-          <div class="chat-msg bot">
-            你好！我是博客 AI 助手，可以帮你了解文章内容。试试问我：
-          </div>
+          <div class="chat-msg system">${intro}</div>
         </div>
 
         <div class="chat-suggestions" id="chatSuggestions">
-          <button onclick="ChatBot.ask('推荐一篇文章给我')">推荐文章</button>
-          <button onclick="ChatBot.ask('这个博客主要讲什么？')">博客介绍</button>
-          <button onclick="ChatBot.ask('有哪些技术相关的内容？')">技术内容</button>
+          <button onclick="ChatBot.ask('你平时工作做什么？')">你的工作具体做什么</button>
+          <button onclick="ChatBot.ask('INFJ对你工作有什么影响')">INFJ对你工作有什么影响</button>
+          <button onclick="ChatBot.ask('你的个人主页什么样')">你的个人主页什么样</button>
+          <button onclick="ChatBot.ask('你最近在忙什么？')">你最近在忙什么</button>
+          <button onclick="ChatBot.ask('你喜欢什么类型的游戏')">我喜欢什么类型的游戏</button>
+          <button onclick="ChatBot.ask('你是什么技术栈？')">你是什么技术栈？</button>
+          <button onclick="ChatBot.ask('平时怎么学习新技术？')">怎么学AI技术</button>
         </div>
 
         <div class="chat-input-area">
-          <input type="text" id="chatInput" placeholder="输入你的问题..." autocomplete="off">
-          <button onclick="ChatBot.send()">&#10148;</button>
+          <input type="text" id="chatInput" placeholder="随便问，不用客气..." autocomplete="off">
+          <button onclick="ChatBot.send()">发送</button>
         </div>
       </div>
     `;
@@ -90,19 +92,6 @@
     if (isOpen) {
       document.getElementById('chatInput').focus();
     }
-  }
-
-  function toggleSettings() {
-    isSettingsOpen = !isSettingsOpen;
-    const settings = document.getElementById('chatSettings');
-    const messages = document.getElementById('chatMessages');
-    const suggestions = document.getElementById('chatSuggestions');
-    const inputArea = document.querySelector('.chat-input-area');
-
-    settings.classList.toggle('show', isSettingsOpen);
-    messages.style.display = isSettingsOpen ? 'none' : '';
-    suggestions.style.display = isSettingsOpen ? 'none' : '';
-    inputArea.style.display = isSettingsOpen ? 'none' : '';
   }
 
   // ========== Chat ==========
@@ -143,48 +132,24 @@
   }
 
   function buildPostContext() {
-    if (posts.length === 0) return '暂无文章内容。';
-
+    if (posts.length === 0) return '';
     const summaries = posts.map(p => {
-      const tags = p.tags.length ? ` [标签: ${p.tags.join(', ')}]` : '';
-      // Strip HTML tags from content for context
-      const plain = p.content.replace(/<[^>]+>/g, '').substring(0, 300);
-      return `- "${p.title}" (${p.date})${tags}\n  摘要: ${p.summary}\n  内容概要: ${plain}...`;
+      const tags = p.tags.length ? ` [${p.tags.join(', ')}]` : '';
+      const plain = p.content.replace(/<[^>]+>/g, '').substring(0, 200);
+      return `- "${p.title}" (${p.date})${tags}\n  ${p.summary}`;
     });
-
-    return `以下是博客「杨轩的博客」的所有文章：\n\n${summaries.join('\n\n')}`;
+    return `\n\n我写过的博客文章：\n${summaries.join('\n')}`;
   }
 
   async function ask(question) {
-    // Show user message
     addMessage(question, 'user');
-
-    // Hide suggestions after first question
     document.getElementById('chatSuggestions').style.display = 'none';
-
-    // Clear input
     document.getElementById('chatInput').value = '';
-
-    // Check posts
-    if (posts.length === 0) {
-      addBotMessage('暂无文章内容，无法回答问题。');
-      return;
-    }
 
     addTyping();
 
     const postContext = buildPostContext();
-    const systemPrompt = `你是「杨轩的博客」的 AI 助手。根据博客文章内容回答用户问题。
-
-规则：
-- 只基于博客文章内容回答，不要编造不存在的文章
-- 回答要简洁自然，像朋友聊天一样
-- 如果用户想了解某篇文章，给出文章标题并建议点击阅读
-- 推荐文章时说明推荐理由
-- 如果问题和博客内容无关，友好地引导回博客话题
-
-博客文章列表：
-${postContext}`;
+    const systemPrompt = `${soul}${postContext}`;
 
     chatHistory.push({ role: 'user', content: question });
 
@@ -201,8 +166,8 @@ ${postContext}`;
             { role: 'system', content: systemPrompt },
             ...chatHistory.slice(-10)
           ],
-          temperature: 0.7,
-          max_tokens: 800
+          temperature: 0.8,
+          max_tokens: 600
         })
       });
 
@@ -218,7 +183,7 @@ ${postContext}`;
 
       chatHistory.push({ role: 'assistant', content: reply });
 
-      // Format reply with article links
+      // Auto-link article titles
       let formatted = reply;
       posts.forEach(p => {
         if (formatted.includes(p.title)) {
@@ -244,9 +209,8 @@ ${postContext}`;
   }
 
   // ========== Expose ==========
-  window.ChatBot = { toggle, ask, send, toggleSettings };
+  window.ChatBot = { toggle, ask, send };
 
-  // Init when DOM ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initChat);
   } else {
