@@ -125,22 +125,6 @@
     return div;
   }
 
-  function addTyping() {
-    const container = document.getElementById('chatMessages');
-    const div = document.createElement('div');
-    div.className = 'chat-msg typing';
-    div.id = 'typingIndicator';
-    div.textContent = '正在思考...';
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-    return div;
-  }
-
-  function removeTyping() {
-    const el = document.getElementById('typingIndicator');
-    if (el) el.remove();
-  }
-
   function buildPostContext() {
     if (posts.length === 0) return '';
     const summaries = posts.map(p => {
@@ -151,20 +135,10 @@
     return `\n\n我写过的博客文章：\n${summaries.join('\n')}`;
   }
 
-  async function ask(question) {
-    addMessage(question, 'user');
-    document.getElementById('chatSuggestions').style.display = 'none';
-    document.getElementById('chatInput').value = '';
-
-    addTyping();
-
-    const postContext = buildPostContext();
-    const systemPrompt = `${soul}${postContext}`;
-
-    chatHistory.push({ role: 'user', content: question });
-
+  // ========== SSE Streaming ==========
+  async function streamChat(messages, onToken, onDone, onError) {
+    const apiKey = atob(_k[0]);
     try {
-      const apiKey = atob(_k[0]);
       const res = await fetch(DEEPSEEK_API, {
         method: 'POST',
         headers: {
@@ -173,43 +147,90 @@
         },
         body: JSON.stringify({
           model: 'deepseek-chat',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...chatHistory.slice(-10)
-          ],
+          messages,
           temperature: 0.8,
-          max_tokens: 600
+          max_tokens: 600,
+          stream: true
         })
       });
-
-      removeTyping();
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error?.message || `HTTP ${res.status}`);
       }
 
-      const data = await res.json();
-      const reply = data.choices?.[0]?.message?.content || '抱歉，没有收到回复。';
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let fullReply = '';
 
-      chatHistory.push({ role: 'assistant', content: reply });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
 
-      // Auto-link article titles
-      let formatted = reply;
-      posts.forEach(p => {
-        if (formatted.includes(p.title)) {
-          formatted = formatted.replace(
-            new RegExp(p.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
-            `<a href="post.html?id=${p.id}">${p.title}</a>`
-          );
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep incomplete line in buffer
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+          const payload = trimmed.slice(5).trim();
+          if (payload === '[DONE]') continue;
+          try {
+            const json = JSON.parse(payload);
+            const delta = json.choices?.[0]?.delta?.content;
+            if (delta) {
+              fullReply += delta;
+              onToken(delta, fullReply);
+            }
+          } catch (_) {}
         }
-      });
+      }
 
-      addBotMessage(formatted);
+      onDone(fullReply);
     } catch (e) {
-      removeTyping();
-      addBotMessage('出错了: ' + e.message);
+      onError(e);
     }
+  }
+
+  async function ask(question) {
+    addMessage(question, 'user');
+    document.getElementById('chatSuggestions').style.display = 'none';
+    document.getElementById('chatInput').value = '';
+
+    const postContext = buildPostContext();
+    const systemPrompt = `${soul}${postContext}`;
+    chatHistory.push({ role: 'user', content: question });
+
+    const botDiv = addBotMessage('');
+    let textContent = '';
+
+    await streamChat(
+      [{ role: 'system', content: systemPrompt }, ...chatHistory.slice(-10)],
+      (token) => {
+        textContent += token;
+        // Auto-link article titles
+        let formatted = textContent;
+        posts.forEach(p => {
+          if (formatted.includes(p.title)) {
+            formatted = formatted.replace(
+              new RegExp(p.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+              `<a href="post.html?id=${p.id}">${p.title}</a>`
+            );
+          }
+        });
+        botDiv.innerHTML = formatted;
+        const container = document.getElementById('chatMessages');
+        container.scrollTop = container.scrollHeight;
+      },
+      (fullReply) => {
+        chatHistory.push({ role: 'assistant', content: fullReply });
+      },
+      (e) => {
+        botDiv.innerHTML = '出错了: ' + e.message;
+      }
+    );
   }
 
   function send() {
@@ -242,71 +263,32 @@
     container.scrollTop = container.scrollHeight;
   }
 
-  function inlineAddTyping() {
-    const container = document.getElementById('inlineChatMessages');
-    if (!container) return;
-    const div = document.createElement('div');
-    div.className = 'chat-msg typing';
-    div.id = 'inlineTyping';
-    div.textContent = '正在思考...';
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-  }
-
-  function inlineRemoveTyping() {
-    const el = document.getElementById('inlineTyping');
-    if (el) el.remove();
-  }
-
   async function inlineAsk(question) {
     inlineAddUser(question);
     document.getElementById('inlineChatSuggestions').style.display = 'none';
     document.getElementById('inlineChatInput').value = '';
 
-    inlineAddTyping();
-
-    // Get current post context from page title
     const postTitle = document.querySelector('.post-detail-header h1')?.textContent || '';
     const postContent = document.querySelector('.post-detail-content')?.textContent?.substring(0, 500) || '';
-
     const systemPrompt = `${soul}\n\n当前这篇文章：「${postTitle}」\n内容摘要：${postContent}`;
-
     inlineHistory.push({ role: 'user', content: question });
 
-    try {
-      const apiKey = atob(_k[0]);
-      const res = await fetch(DEEPSEEK_API, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...inlineHistory.slice(-8)
-          ],
-          temperature: 0.8,
-          max_tokens: 600
-        })
-      });
+    const botDiv = inlineAddBot('');
 
-      inlineRemoveTyping();
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error?.message || `HTTP ${res.status}`);
+    await streamChat(
+      [{ role: 'system', content: systemPrompt }, ...inlineHistory.slice(-8)],
+      (token, full) => {
+        botDiv.innerHTML = full;
+        const container = document.getElementById('inlineChatMessages');
+        container.scrollTop = container.scrollHeight;
+      },
+      (fullReply) => {
+        inlineHistory.push({ role: 'assistant', content: fullReply });
+      },
+      (e) => {
+        botDiv.innerHTML = '出错了: ' + e.message;
       }
-
-      const data = await res.json();
-      const reply = data.choices?.[0]?.message?.content || '抱歉，没有收到回复。';
-      inlineHistory.push({ role: 'assistant', content: reply });
-      inlineAddBot(reply);
-    } catch (e) {
-      inlineRemoveTyping();
-      inlineAddBot('出错了: ' + e.message);
-    }
+    );
   }
 
   function inlineSend() {
