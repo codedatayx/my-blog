@@ -352,6 +352,51 @@
       cursor: pointer;
     }
 
+    /* Editor Toolbar */
+    .editor-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      padding: 0.5rem 0.6rem;
+      background: #faf8f3;
+      border: 1.5px solid var(--border);
+      border-bottom: none;
+      border-radius: 8px 8px 0 0;
+    }
+    .editor-toolbar button {
+      padding: 0.25rem 0.6rem;
+      font-size: 0.78rem;
+      font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s;
+      font-weight: 500;
+    }
+    .editor-toolbar button:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: var(--primary-bg);
+    }
+    .editor-toolbar .toolbar-sep {
+      width: 1px;
+      background: var(--border);
+      margin: 0 0.2rem;
+      align-self: stretch;
+    }
+    .editor-toolbar .toolbar-img-btn {
+      font-family: inherit;
+      font-weight: 600;
+      color: var(--primary);
+      border-color: var(--primary);
+    }
+    #editContent {
+      border-radius: 0 0 8px 8px;
+      border-top: none;
+    }
+
     /* Confirm dialog */
     .confirm-overlay {
       display: none;
@@ -464,19 +509,26 @@
           </div>
         </div>
         <div class="form-group">
-          <label>插入图片</label>
-          <div class="upload-area" id="uploadArea">
-            <input type="file" id="imageInput" accept="image/*" multiple style="display:none;">
-            <p>拖拽图片到此处，或 <a href="javascript:void(0)" onclick="document.getElementById('imageInput').click()">点击选择</a></p>
-            <p class="hint">支持 jpg、png、gif、webp，会自动上传到仓库</p>
-          </div>
-          <div id="uploadStatus" class="status-msg"></div>
-          <div id="uploadPreview" class="upload-preview"></div>
-        </div>
-        <div class="form-group">
           <label>正文内容</label>
-          <textarea id="editContent" placeholder="在这里写文章正文，支持 HTML 标签"></textarea>
-          <p class="hint">支持 HTML 标签 · 可直接 Ctrl+V 粘贴截图或复制的图片</p>
+          <div class="editor-toolbar" id="editorToolbar">
+            <button type="button" onclick="insertCodeBlock('python')">Python</button>
+            <button type="button" onclick="insertCodeBlock('java')">Java</button>
+            <button type="button" onclick="insertCodeBlock('javascript')">JavaScript</button>
+            <button type="button" onclick="insertCodeBlock('css')">CSS</button>
+            <button type="button" onclick="insertCodeBlock('html')">HTML</button>
+            <button type="button" onclick="insertCodeBlock('go')">Go</button>
+            <button type="button" onclick="insertCodeBlock('rust')">Rust</button>
+            <button type="button" onclick="insertCodeBlock('cpp')">C/C++</button>
+            <button type="button" onclick="insertCodeBlock('sql')">SQL</button>
+            <button type="button" onclick="insertCodeBlock('bash')">Shell</button>
+            <button type="button" onclick="insertCodeBlock('json')">JSON</button>
+            <span class="toolbar-sep"></span>
+            <button type="button" class="toolbar-img-btn" onclick="insertImageFromToolbar()">&#128247; 图片</button>
+          </div>
+          <input type="file" id="imageInput" accept="image/*" multiple style="display:none;">
+          <div id="uploadStatus" class="status-msg"></div>
+          <textarea id="editContent" rows="14" placeholder="在这里写文章正文，支持 HTML 标签"></textarea>
+          <p class="hint">点击上方按钮插入代码块或图片 · 可直接 Ctrl+V 粘贴截图</p>
         </div>
         <div class="editor-btns">
           <button class="btn btn-primary" onclick="savePost()">保存</button>
@@ -552,7 +604,6 @@
         document.getElementById('pwInput').focus();
       }
       setupTagInput();
-      setupUpload();
       setupPaste();
     }
 
@@ -786,36 +837,6 @@
       renderTagInput();
     }
 
-    // ========== Image Upload ==========
-    function setupUpload() {
-      const area = document.getElementById('uploadArea');
-      const input = document.getElementById('imageInput');
-
-      area.addEventListener('click', (e) => {
-        if (e.target.tagName !== 'A') input.click();
-      });
-
-      area.addEventListener('dragover', (e) => { e.preventDefault(); area.classList.add('dragover'); });
-      area.addEventListener('dragleave', () => area.classList.remove('dragover'));
-      area.addEventListener('drop', (e) => {
-        e.preventDefault();
-        area.classList.remove('dragover');
-        handleFiles(e.dataTransfer.files);
-      });
-
-      input.addEventListener('change', () => {
-        handleFiles(input.files);
-        input.value = '';
-      });
-    }
-
-    async function handleFiles(files) {
-      for (const file of files) {
-        if (!file.type.startsWith('image/')) continue;
-        await uploadImage(file);
-      }
-    }
-
     // ========== Paste Image ==========
     function setupPaste() {
       const textarea = document.getElementById('editContent');
@@ -870,23 +891,46 @@
       return `https://raw.githubusercontent.com/${OWNER}/${REPO}/main/${filename}`;
     }
 
-    async function uploadImage(file) {
-      const previewEl = document.getElementById('uploadPreview');
-      showStatus('uploadStatus', `上传中: ${file.name}...`, 'loading');
-      try {
-        const rawUrl = await uploadImageToGithub(file);
-        const htmlTag = `<img src="${rawUrl}" alt="${escHtml(file.name)}">`;
-        const preview = document.createElement('div');
-        preview.className = 'uploaded-img';
-        preview.innerHTML = `
-          <img src="${rawUrl}" alt="${escHtml(file.name)}">
-          <button class="copy-link" onclick="insertImage('${htmlTag.replace(/'/g, "\\'")}')">插入</button>
-        `;
-        previewEl.appendChild(preview);
-        hideStatus('uploadStatus');
-      } catch (e) {
-        showStatus('uploadStatus', '上传失败: ' + e.message, 'error');
-      }
+    // ========== Toolbar: Code Block ==========
+    const LANG_NAMES = { python:'Python', java:'Java', javascript:'JavaScript', css:'CSS', html:'HTML', go:'Go', rust:'Rust', cpp:'C/C++', sql:'SQL', bash:'Shell', json:'JSON' };
+
+    function insertCodeBlock(lang) {
+      const textarea = document.getElementById('editContent');
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const selected = textarea.value.substring(start, end);
+      const code = selected || '在此输入代码';
+      const label = LANG_NAMES[lang] || lang;
+      const tag = `<pre><code class="language-${lang}" data-lang="${label}">\n${code}\n</code></pre>`;
+      const before = textarea.value.substring(0, start);
+      const after = textarea.value.substring(end);
+      textarea.value = before + tag + after;
+      textarea.focus();
+      // Select the placeholder text so user can type over it
+      const codeStart = start + `<pre><code class="language-${lang}">\n`.length;
+      const codeEnd = codeStart + code.length;
+      textarea.selectionStart = codeStart;
+      textarea.selectionEnd = codeEnd;
+    }
+
+    // ========== Toolbar: Image ==========
+    async function insertImageFromToolbar() {
+      const input = document.getElementById('imageInput');
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+        input.value = '';
+        showStatus('editorStatus', '上传图片中...', 'loading');
+        try {
+          const rawUrl = await uploadImageToGithub(file);
+          const tag = `<img src="${rawUrl}" alt="${escHtml(file.name)}">`;
+          insertImage(tag);
+          hideStatus('editorStatus');
+        } catch (e) {
+          showStatus('editorStatus', '上传失败: ' + e.message, 'error');
+        }
+      };
+      input.click();
     }
 
     function insertImage(htmlTag) {
