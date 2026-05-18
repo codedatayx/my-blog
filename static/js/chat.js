@@ -227,12 +227,13 @@
 
   function inlineAddBot(text) {
     const container = document.getElementById('inlineChatMessages');
-    if (!container) return;
+    if (!container) return null;
     const div = document.createElement('div');
     div.className = 'chat-msg bot';
     div.innerHTML = text;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
+    return div;
   }
 
   function inlineAddUser(text) {
