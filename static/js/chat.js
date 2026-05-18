@@ -135,99 +135,56 @@
     return `\n\n我写过的博客文章：\n${summaries.join('\n')}`;
   }
 
-  // ========== SSE Streaming ==========
-  async function streamChat(messages, onToken, onDone, onError) {
-    const apiKey = atob(_k[0]);
-    try {
-      const res = await fetch(DEEPSEEK_API, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages,
-          temperature: 0.8,
-          max_tokens: 600,
-          stream: true
-        })
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error?.message || `HTTP ${res.status}`);
+  // ========== Typing Animation ==========
+  function typeText(el, text, onDone) {
+    let i = 0;
+    const container = el.parentElement;
+    function tick() {
+      if (i < text.length) {
+        // Auto-link article titles
+        let formatted = text.substring(0, i + 1);
+        posts.forEach(p => {
+          if (formatted.includes(p.title)) {
+            formatted = formatted.replace(
+              new RegExp(p.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+              `<a href="post.html?id=${p.id}">${p.title}</a>`
+            );
+          }
+        });
+        el.innerHTML = formatted;
+        container.scrollTop = container.scrollHeight;
+        i++;
+        // Faster for ASCII, slower for CJK
+        const delay = text.charCodeAt(i - 1) > 127 ? 35 : 18;
+        setTimeout(tick, delay);
+      } else {
+        onDone();
       }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let fullReply = '';
-      let done = false;
-
-      // Read stream in background
-      (async () => {
-        try {
-          while (true) {
-            const { done: streamDone, value } = await reader.read();
-            if (streamDone) { done = true; break; }
-            buffer += decoder.decode(value, { stream: true });
-          }
-        } catch (_) {
-          done = true;
-        }
-      })();
-
-      // Poll buffer for new tokens
-      await new Promise((resolve) => {
-        const interval = setInterval(() => {
-          // Process complete lines from buffer
-          const newlineIdx = buffer.indexOf('\n');
-          if (newlineIdx !== -1) {
-            const lines = buffer.split('\n');
-            buffer = lines.pop();
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (!trimmed || !trimmed.startsWith('data:')) continue;
-              const payload = trimmed.slice(5).trim();
-              if (payload === '[DONE]') continue;
-              try {
-                const json = JSON.parse(payload);
-                const delta = json.choices?.[0]?.delta?.content;
-                if (delta) {
-                  fullReply += delta;
-                  onToken(delta, fullReply);
-                }
-              } catch (_) {}
-            }
-          }
-          if (done) {
-            // Process remaining buffer
-            if (buffer.trim()) {
-              const trimmed = buffer.trim();
-              if (trimmed.startsWith('data:')) {
-                const payload = trimmed.slice(5).trim();
-                if (payload !== '[DONE]') {
-                  try {
-                    const json = JSON.parse(payload);
-                    const delta = json.choices?.[0]?.delta?.content;
-                    if (delta) {
-                      fullReply += delta;
-                      onToken(delta, fullReply);
-                    }
-                  } catch (_) {}
-                }
-              }
-            }
-            clearInterval(interval);
-            onDone(fullReply);
-            resolve();
-          }
-        }, 30);
-      });
-    } catch (e) {
-      onError(e);
     }
+    tick();
+  }
+
+  async function chatRequest(messages) {
+    const apiKey = atob(_k[0]);
+    const res = await fetch(DEEPSEEK_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages,
+        temperature: 0.8,
+        max_tokens: 600
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || '抱歉，没有收到回复。';
   }
 
   async function ask(question) {
@@ -240,33 +197,17 @@
     chatHistory.push({ role: 'user', content: question });
 
     const botDiv = addBotMessage('');
-    let textContent = '';
 
-    await streamChat(
-      [{ role: 'system', content: systemPrompt }, ...chatHistory.slice(-10)],
-      (token) => {
-        textContent += token;
-        // Auto-link article titles
-        let formatted = textContent;
-        posts.forEach(p => {
-          if (formatted.includes(p.title)) {
-            formatted = formatted.replace(
-              new RegExp(p.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
-              `<a href="post.html?id=${p.id}">${p.title}</a>`
-            );
-          }
-        });
-        botDiv.innerHTML = formatted;
-        const container = document.getElementById('chatMessages');
-        container.scrollTop = container.scrollHeight;
-      },
-      (fullReply) => {
-        chatHistory.push({ role: 'assistant', content: fullReply });
-      },
-      (e) => {
-        botDiv.innerHTML = '出错了: ' + e.message;
-      }
-    );
+    try {
+      const reply = await chatRequest([
+        { role: 'system', content: systemPrompt },
+        ...chatHistory.slice(-10)
+      ]);
+      chatHistory.push({ role: 'assistant', content: reply });
+      await new Promise(resolve => typeText(botDiv, reply, resolve));
+    } catch (e) {
+      botDiv.innerHTML = '出错了: ' + e.message;
+    }
   }
 
   function send() {
@@ -311,20 +252,16 @@
 
     const botDiv = inlineAddBot('');
 
-    await streamChat(
-      [{ role: 'system', content: systemPrompt }, ...inlineHistory.slice(-8)],
-      (token, full) => {
-        botDiv.innerHTML = full;
-        const container = document.getElementById('inlineChatMessages');
-        container.scrollTop = container.scrollHeight;
-      },
-      (fullReply) => {
-        inlineHistory.push({ role: 'assistant', content: fullReply });
-      },
-      (e) => {
-        botDiv.innerHTML = '出错了: ' + e.message;
-      }
-    );
+    try {
+      const reply = await chatRequest([
+        { role: 'system', content: systemPrompt },
+        ...inlineHistory.slice(-8)
+      ]);
+      inlineHistory.push({ role: 'assistant', content: reply });
+      await new Promise(resolve => typeText(botDiv, reply, resolve));
+    } catch (e) {
+      botDiv.innerHTML = '出错了: ' + e.message;
+    }
   }
 
   function inlineSend() {
