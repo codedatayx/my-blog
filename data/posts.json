@@ -1,5 +1,14 @@
 [
   {
+    "id": "asdasd-1779091767918",
+    "title": "asdasd",
+    "date": "2026-05-18",
+    "summary": "asdasda",
+    "category": "sdasd",
+    "content": "sdasdasdasd",
+    "tags": []
+  },
+  {
     "id": "python-tips",
     "title": "Python 实用技巧整理",
     "date": "2026-05-15",
@@ -12,12 +21,12 @@
     "category": "技术笔记"
   },
   {
-    "id": "asdasd-1779091767918",
-    "title": "asdasd",
+    "id": "pai-大模型-1779093643403",
+    "title": "pai 大模型",
     "date": "2026-05-18",
-    "summary": "asdasda",
-    "category": "sdasd",
-    "content": "sdasdasdasd",
+    "summary": "pai作为claude的底座，蕴含着不同的东西",
+    "category": "未分类",
+    "content": "asdasd",
     "tags": []
   }
 ]
