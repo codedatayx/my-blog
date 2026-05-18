@@ -1,17 +1,13 @@
 // ========== Blog AI Chat ==========
-// Backend proxy hides API key from visitors
 
 (function () {
-  // ===== Change this to your Vercel deployment URL =====
-  // After running `vercel --prod`, replace with your actual URL
-  // Example: const API_URL = 'https://my-blog-api.vercel.app/api/chat.js';
-  const API_URL = localStorage.getItem('chat_api_url') || '/api/chat.js';
-  // =====================================================
+  // API key is base64 encoded, decoded at runtime
+  const _k = ['c2stZTE5MGUzZTM1ZDA4NDdiZTk3MzlmNTBmMzNlZTdmMGI='];
+  const DEEPSEEK_API = 'https://api.deepseek.com/chat/completions';
   const POSTS_FILE = 'data/posts.json';
 
   let posts = [];
   let chatHistory = [];
-  let apiUrl = localStorage.getItem('chat_api_url') || API_URL;
   let isOpen = false;
   let isSettingsOpen = false;
 
@@ -51,10 +47,7 @@
         </div>
 
         <div class="chat-settings" id="chatSettings">
-          <label>API 后端地址</label>
-          <input type="text" id="chatApiUrl" placeholder="https://your-app.vercel.app/api/chat.js">
-          <p class="hint">你的 Vercel 部署地址，格式: https://xxx.vercel.app/api/chat.js</p>
-          <button class="save-btn" onclick="ChatBot.saveKey()">保存</button>
+          <p class="hint" style="text-align:center;padding:1rem 0;">AI 助手已就绪</p>
         </div>
 
         <div class="chat-messages" id="chatMessages">
@@ -110,19 +103,6 @@
     messages.style.display = isSettingsOpen ? 'none' : '';
     suggestions.style.display = isSettingsOpen ? 'none' : '';
     inputArea.style.display = isSettingsOpen ? 'none' : '';
-
-    if (isSettingsOpen) {
-      document.getElementById('chatApiUrl').value = apiUrl;
-    }
-  }
-
-  function saveKey() {
-    apiUrl = document.getElementById('chatApiUrl').value.trim();
-    if (apiUrl) {
-      localStorage.setItem('chat_api_url', apiUrl);
-      addBotMessage('API 地址已保存！');
-    }
-    toggleSettings();
   }
 
   // ========== Chat ==========
@@ -185,12 +165,6 @@
     // Clear input
     document.getElementById('chatInput').value = '';
 
-    // Check API URL
-    if (!apiUrl) {
-      addBotMessage('请先在设置中配置 API 后端地址（点击右上角齿轮图标）。');
-      return;
-    }
-
     // Check posts
     if (posts.length === 0) {
       addBotMessage('暂无文章内容，无法回答问题。');
@@ -215,9 +189,13 @@ ${postContext}`;
     chatHistory.push({ role: 'user', content: question });
 
     try {
-      const res = await fetch(apiUrl, {
+      const apiKey = atob(_k[0]);
+      const res = await fetch(DEEPSEEK_API, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
         body: JSON.stringify({
           messages: [
             { role: 'system', content: systemPrompt },
@@ -266,7 +244,7 @@ ${postContext}`;
   }
 
   // ========== Expose ==========
-  window.ChatBot = { toggle, ask, send, toggleSettings, saveKey };
+  window.ChatBot = { toggle, ask, send, toggleSettings };
 
   // Init when DOM ready
   if (document.readyState === 'loading') {
