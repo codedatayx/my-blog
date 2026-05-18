@@ -25,6 +25,7 @@
     </div>
 
     <div class="tags-filter" id="tagsFilter"></div>
+    <div class="tags-filter" id="categoryFilter"></div>
 
     <div class="post-list" id="postList"></div>
   </div>
@@ -38,6 +39,7 @@
   <script>
     const params = new URLSearchParams(window.location.search);
     const activeTag = params.get('tag');
+    const activeCategory = params.get('category');
     let posts = [];
     let allTags = [];
 
@@ -48,6 +50,7 @@
 
       allTags = [...new Set(posts.flatMap(p => p.tags))].sort();
       renderTags();
+      renderCategories();
       renderPosts();
     }
 
@@ -59,18 +62,34 @@
       container.innerHTML = `<button class="tag-btn ${!activeTag ? 'active' : ''}" onclick="filterByTag(null)">全部</button>` + html;
     }
 
+    function renderCategories() {
+      const container = document.getElementById('categoryFilter');
+      const allCats = [...new Set(posts.map(p => p.category || '未分类'))].sort();
+      const html = allCats.map(cat =>
+        `<button class="tag-btn ${cat === activeCategory ? 'active' : ''}" onclick="filterByCategory('${cat}')">${cat}</button>`
+      ).join('');
+      container.innerHTML = `<button class="tag-btn ${!activeCategory ? 'active' : ''}" onclick="filterByCategory(null)">全部分类</button>` + html;
+    }
+
     function filterByTag(tag) {
-      if (tag) {
-        window.history.replaceState(null, '', `?tag=${encodeURIComponent(tag)}`);
-      } else {
-        window.history.replaceState(null, '', window.location.pathname);
-      }
-      location.reload();
+      const p = new URLSearchParams(window.location.search);
+      if (tag) p.set('tag', tag); else p.delete('tag');
+      const qs = p.toString();
+      window.location.href = qs ? `?${qs}` : window.location.pathname;
+    }
+
+    function filterByCategory(cat) {
+      const p = new URLSearchParams(window.location.search);
+      if (cat) p.set('category', cat); else p.delete('category');
+      const qs = p.toString();
+      window.location.href = qs ? `?${qs}` : window.location.pathname;
     }
 
     function renderPosts() {
       const container = document.getElementById('postList');
-      const filtered = activeTag ? posts.filter(p => p.tags.includes(activeTag)) : posts;
+      let filtered = posts;
+      if (activeTag) filtered = filtered.filter(p => p.tags.includes(activeTag));
+      if (activeCategory) filtered = filtered.filter(p => (p.category || '未分类') === activeCategory);
 
       if (filtered.length === 0) {
         container.innerHTML = '<div class="empty-state"><p>暂无相关文章</p></div>';

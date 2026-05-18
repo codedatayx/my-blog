@@ -5,6 +5,139 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>文章详情</title>
   <link rel="stylesheet" href="static/css/style.css">
+  <style>
+    /* Post page layout */
+    .post-layout {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 2rem;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+    .post-sidebar {
+      position: sticky;
+      top: 72px;
+      align-self: start;
+    }
+    .sidebar-section {
+      background: var(--bg-card);
+      border-radius: 12px;
+      padding: 1rem;
+      box-shadow: var(--shadow);
+      margin-bottom: 1rem;
+    }
+    .sidebar-section h3 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 0.6rem;
+    }
+    .category-list {
+      list-style: none;
+    }
+    .category-list li {
+      margin-bottom: 0.2rem;
+    }
+    .category-list a {
+      display: block;
+      padding: 0.3rem 0.6rem;
+      font-size: 0.85rem;
+      color: var(--text-light);
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .category-list a:hover,
+    .category-list a.active {
+      color: var(--primary);
+      background: var(--primary-bg);
+    }
+    .category-list .count {
+      float: right;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+    .post-main {
+      min-width: 0;
+    }
+    .post-content-card {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 2.5rem 3rem;
+      box-shadow: var(--shadow);
+      margin-bottom: 1.5rem;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.9rem;
+      color: var(--text-light);
+      margin-bottom: 1rem;
+    }
+    .back-link:hover { color: var(--primary); }
+    /* Recommended */
+    .recommend-section {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      box-shadow: var(--shadow);
+      margin-bottom: 1.5rem;
+    }
+    .recommend-section h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 0.75rem;
+    }
+    .recommend-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .recommend-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      transition: background 0.2s;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .recommend-item:hover {
+      background: var(--primary-bg);
+    }
+    .recommend-item .title {
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+    .recommend-item .date {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    @media (max-width: 700px) {
+      .post-layout {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        padding: 1rem;
+      }
+      .post-sidebar {
+        position: static;
+        display: flex;
+        gap: 0.5rem;
+        overflow-x: auto;
+      }
+      .sidebar-section {
+        flex-shrink: 0;
+        margin-bottom: 0;
+      }
+      .post-content-card {
+        padding: 1.5rem;
+      }
+    }
+  </style>
 </head>
 <body>
   <nav class="navbar">
@@ -18,12 +151,46 @@
     </div>
   </nav>
 
-  <div class="container">
-    <a href="index.html" class="back-link">&larr; 返回首页</a>
+  <div class="post-layout">
+    <!-- Left Sidebar -->
+    <aside class="post-sidebar" id="postSidebar">
+      <div class="sidebar-section">
+        <h3>文章分类</h3>
+        <ul class="category-list" id="categoryList"></ul>
+      </div>
+    </aside>
 
-    <article class="post-detail" id="postDetail">
-      <div class="empty-state"><p>文章不存在</p></div>
-    </article>
+    <!-- Main Content -->
+    <main class="post-main">
+      <a href="index.html" class="back-link">&larr; 返回首页</a>
+
+      <article class="post-content-card" id="postDetail">
+        <div class="empty-state"><p>文章不存在</p></div>
+      </article>
+
+      <!-- Recommended Articles -->
+      <div class="recommend-section" id="recommendSection" style="display:none;">
+        <h3>推荐文章</h3>
+        <div class="recommend-list" id="recommendList"></div>
+      </div>
+
+      <!-- Inline Chat -->
+      <div class="inline-chat" id="inlineChat">
+        <h3 class="inline-chat-title">问我的数字分身</h3>
+        <div class="inline-chat-messages" id="inlineChatMessages">
+          <div class="chat-msg system">我是杨轩，一个真实的开发者，不是什么AI模型。随便问，聊聊技术、工作、生活都行。</div>
+        </div>
+        <div class="inline-chat-suggestions" id="inlineChatSuggestions">
+          <button onclick="ChatBot.inlineAsk('这篇文章讲了什么？')">这篇文章讲了什么</button>
+          <button onclick="ChatBot.inlineAsk('有什么相关的文章推荐？')">相关文章推荐</button>
+          <button onclick="ChatBot.inlineAsk('你写这篇文章的初衷是什么？')">写作初衷</button>
+        </div>
+        <div class="inline-chat-input">
+          <input type="text" id="inlineChatInput" placeholder="随便问，不用客气..." autocomplete="off">
+          <button onclick="ChatBot.inlineSend()">发送</button>
+        </div>
+      </div>
+    </main>
   </div>
 
   <footer class="footer">
@@ -33,54 +200,63 @@
   <script src="static/js/chat.js"></script>
 
   <script>
+    let allPosts = [];
+
     async function init() {
       const params = new URLSearchParams(window.location.search);
       const id = params.get('id');
       if (!id) return;
 
       const res = await fetch('data/posts.json');
-      const posts = await res.json();
-      const post = posts.find(p => p.id === id);
+      allPosts = await res.json();
+      const post = allPosts.find(p => p.id === id);
       if (!post) return;
 
       document.title = `${post.title} - 杨轩的博客`;
 
+      // Render article
       document.getElementById('postDetail').innerHTML = `
         <header class="post-detail-header">
           <h1>${post.title}</h1>
           <div class="meta">
             <span>${post.date}</span>
+            ${post.category ? `<span class="tag-badge">${post.category}</span>` : ''}
             <div class="post-card-tags">
               ${post.tags.map(t => `<span class="tag-badge">${t}</span>`).join('')}
             </div>
           </div>
         </header>
-        <div class="post-detail-content">
-          ${post.content}
-        </div>
+        <div class="post-detail-content">${post.content}</div>
         <div class="post-detail-tags">
           ${post.tags.map(t => `<a href="index.html?tag=${encodeURIComponent(t)}"><span class="tag-badge">${t}</span></a>`).join('')}
         </div>
       `;
 
-      // Inject inline chat after the article
-      document.getElementById('postDetail').insertAdjacentHTML('afterend', `
-        <div class="inline-chat" id="inlineChat">
-          <h3 class="inline-chat-title">问我的数字分身</h3>
-          <div class="inline-chat-messages" id="inlineChatMessages">
-            <div class="chat-msg system">我就是杨轩本人，不是什么AI模型。随便问，聊聊技术、工作、生活都行。</div>
-          </div>
-          <div class="inline-chat-suggestions" id="inlineChatSuggestions">
-            <button onclick="ChatBot.inlineAsk('这篇文章讲了什么？')">这篇文章讲了什么</button>
-            <button onclick="ChatBot.inlineAsk('有什么相关的文章推荐？')">相关文章推荐</button>
-            <button onclick="ChatBot.inlineAsk('你写这篇文章的初衷是什么？')">写作初衷</button>
-          </div>
-          <div class="inline-chat-input">
-            <input type="text" id="inlineChatInput" placeholder="随便问，不用客气..." autocomplete="off">
-            <button onclick="ChatBot.inlineSend()">发送</button>
-          </div>
-        </div>
-      `);
+      // Render categories
+      const catMap = {};
+      allPosts.forEach(p => {
+        const cat = p.category || '未分类';
+        if (!catMap[cat]) catMap[cat] = 0;
+        catMap[cat]++;
+      });
+      const currentCat = post.category || '未分类';
+      document.getElementById('categoryList').innerHTML = Object.entries(catMap).map(([cat, count]) =>
+        `<li><a href="index.html?category=${encodeURIComponent(cat)}" class="${cat === currentCat ? 'active' : ''}">${cat}<span class="count">${count}</span></a></li>`
+      ).join('');
+
+      // Render recommended articles (same category, excluding current)
+      const recommends = allPosts.filter(p => p.id !== id && (p.category || '未分类') === currentCat).slice(0, 5);
+      // If no same-category articles, show recent ones
+      const recList = recommends.length > 0 ? recommends : allPosts.filter(p => p.id !== id).slice(0, 3);
+      if (recList.length > 0) {
+        document.getElementById('recommendSection').style.display = 'block';
+        document.getElementById('recommendList').innerHTML = recList.map(p =>
+          `<a class="recommend-item" href="post.html?id=${p.id}">
+            <span class="title">${p.title}</span>
+            <span class="date">${p.date}</span>
+          </a>`
+        ).join('');
+      }
     }
 
     init();

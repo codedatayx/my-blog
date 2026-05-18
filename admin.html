@@ -397,6 +397,11 @@
           <input type="text" id="editSummary" placeholder="一句话描述文章内容">
         </div>
         <div class="form-group">
+          <label>分类</label>
+          <input type="text" id="editCategory" placeholder="如：技术笔记、生活随笔、项目记录" list="categoryOptions">
+          <datalist id="categoryOptions"></datalist>
+        </div>
+        <div class="form-group">
           <label>标签</label>
           <div class="tag-input-wrap" id="tagInputWrap" onclick="document.getElementById('tagInput').focus()">
             <input type="text" id="tagInput" placeholder="输入标签后回车">
@@ -566,14 +571,21 @@
       document.getElementById('editorTitle').textContent = post ? '编辑文章' : '新建文章';
       document.getElementById('editTitle').value = post ? post.title : '';
       document.getElementById('editSummary').value = post ? post.summary : '';
+      document.getElementById('editCategory').value = post ? (post.category || '') : '';
       document.getElementById('editContent').value = post ? post.content : '';
 
       currentTags = post ? [...post.tags] : [];
       renderTagInput();
+      updateCategoryOptions();
 
       document.getElementById('dashboardView').style.display = 'none';
       document.getElementById('editorView').style.display = 'block';
       hideStatus('editorStatus');
+    }
+
+    function updateCategoryOptions() {
+      const cats = [...new Set(posts.map(p => p.category).filter(Boolean))];
+      document.getElementById('categoryOptions').innerHTML = cats.map(c => `<option value="${escHtml(c)}">`).join('');
     }
 
     function editPost(id) {
@@ -589,6 +601,7 @@
     async function savePost() {
       const title = document.getElementById('editTitle').value.trim();
       const summary = document.getElementById('editSummary').value.trim();
+      const category = document.getElementById('editCategory').value.trim();
       const content = document.getElementById('editContent').value.trim();
 
       if (!title) { showStatus('editorStatus', '请输入标题', 'error'); return; }
@@ -602,13 +615,14 @@
           if (idx !== -1) {
             posts[idx].title = title;
             posts[idx].summary = summary;
+            posts[idx].category = category || '未分类';
             posts[idx].content = content;
             posts[idx].tags = [...currentTags];
           }
         } else {
           const id = slugify(title) + '-' + Date.now();
           const today = new Date().toISOString().split('T')[0];
-          posts.push({ id, title, date: today, summary, content, tags: [...currentTags] });
+          posts.push({ id, title, date: today, summary, category: category || '未分类', content, tags: [...currentTags] });
         }
 
         await saveToGitHub(posts);
