@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的博客</title>
+  <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="index.html" class="navbar-brand">我的博客</a>
+      <ul class="navbar-links">
+        <li><a href="index.html" class="active">首页</a></li>
+        <li><a href="tags.html">标签</a></li>
+        <li><a href="about.html">关于我</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="hero">
+      <h1>我的博客</h1>
+      <p class="subtitle">记录技术探索与生活感悟</p>
+    </div>
+
+    <div class="tags-filter" id="tagsFilter"></div>
+
+    <div class="post-list" id="postList"></div>
+  </div>
+
+  <footer class="footer">
+    <p>&copy; 2026 我的博客 · 用代码书写故事</p>
+  </footer>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const activeTag = params.get('tag');
+    let posts = [];
+    let allTags = [];
+
+    async function init() {
+      const res = await fetch('data/posts.json');
+      posts = await res.json();
+      posts.sort((a, b) => b.date.localeCompare(a.date));
+
+      allTags = [...new Set(posts.flatMap(p => p.tags))].sort();
+      renderTags();
+      renderPosts();
+    }
+
+    function renderTags() {
+      const container = document.getElementById('tagsFilter');
+      const html = allTags.map(tag =>
+        `<button class="tag-btn ${tag === activeTag ? 'active' : ''}" onclick="filterByTag('${tag}')">${tag}</button>`
+      ).join('');
+      container.innerHTML = `<button class="tag-btn ${!activeTag ? 'active' : ''}" onclick="filterByTag(null)">全部</button>` + html;
+    }
+
+    function filterByTag(tag) {
+      if (tag) {
+        window.history.replaceState(null, '', `?tag=${encodeURIComponent(tag)}`);
+      } else {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+      location.reload();
+    }
+
+    function renderPosts() {
+      const container = document.getElementById('postList');
+      const filtered = activeTag ? posts.filter(p => p.tags.includes(activeTag)) : posts;
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>暂无相关文章</p></div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(post => `
+        <article class="post-card" onclick="window.location.href='post.html?id=${post.id}'">
+          <div class="post-card-meta">
+            <span>${post.date}</span>
+          </div>
+          <h2><a href="post.html?id=${post.id}">${post.title}</a></h2>
+          <p class="post-card-summary">${post.summary}</p>
+          <div class="post-card-tags">
+            ${post.tags.map(t => `<span class="tag-badge">${t}</span>`).join('')}
+          </div>
+        </article>
+      `).join('');
+    }
+
+    init();
+  </script>
+</body>
+</html>

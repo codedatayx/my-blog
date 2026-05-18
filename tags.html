@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>标签 - 我的博客</title>
+  <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="index.html" class="navbar-brand">我的博客</a>
+      <ul class="navbar-links">
+        <li><a href="index.html">首页</a></li>
+        <li><a href="tags.html" class="active">标签</a></li>
+        <li><a href="about.html">关于我</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="hero">
+      <h1>标签</h1>
+      <p class="subtitle">按主题浏览文章</p>
+    </div>
+
+    <div class="tags-overview" id="tagsOverview"></div>
+  </div>
+
+  <footer class="footer">
+    <p>&copy; 2026 我的博客 · 用代码书写故事</p>
+  </footer>
+
+  <script>
+    async function init() {
+      const res = await fetch('data/posts.json');
+      const posts = await res.json();
+
+      const tagMap = {};
+      posts.forEach(post => {
+        post.tags.forEach(tag => {
+          if (!tagMap[tag]) tagMap[tag] = [];
+          tagMap[tag].push(post);
+        });
+      });
+
+      const container = document.getElementById('tagsOverview');
+      const sortedTags = Object.keys(tagMap).sort((a, b) => tagMap[b].length - tagMap[a].length);
+
+      container.innerHTML = sortedTags.map(tag => `
+        <div class="tag-group">
+          <div class="tag-group-header">
+            <h3><a href="index.html?tag=${encodeURIComponent(tag)}">${tag}</a></h3>
+            <span class="tag-group-count">${tagMap[tag].length} 篇文章</span>
+          </div>
+          <ul class="tag-group-list">
+            ${tagMap[tag].map(p => `
+              <li><a href="post.html?id=${p.id}">${p.title}</a> <span style="color: var(--text-muted); font-size: 0.85rem;">${p.date}</span></li>
+            `).join('')}
+          </ul>
+        </div>
+      `).join('');
+    }
+
+    init();
+  </script>
+</body>
+</html>

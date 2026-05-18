@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>文章详情</title>
+  <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="index.html" class="navbar-brand">我的博客</a>
+      <ul class="navbar-links">
+        <li><a href="index.html">首页</a></li>
+        <li><a href="tags.html">标签</a></li>
+        <li><a href="about.html">关于我</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container">
+    <a href="index.html" class="back-link">&larr; 返回首页</a>
+
+    <article class="post-detail" id="postDetail">
+      <div class="empty-state"><p>文章不存在</p></div>
+    </article>
+  </div>
+
+  <footer class="footer">
+    <p>&copy; 2026 我的博客 · 用代码书写故事</p>
+  </footer>
+
+  <script>
+    async function init() {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+      if (!id) return;
+
+      const res = await fetch('data/posts.json');
+      const posts = await res.json();
+      const post = posts.find(p => p.id === id);
+      if (!post) return;
+
+      document.title = `${post.title} - 我的博客`;
+
+      document.getElementById('postDetail').innerHTML = `
+        <header class="post-detail-header">
+          <h1>${post.title}</h1>
+          <div class="meta">
+            <span>${post.date}</span>
+            <div class="post-card-tags">
+              ${post.tags.map(t => `<span class="tag-badge">${t}</span>`).join('')}
+            </div>
+          </div>
+        </header>
+        <div class="post-detail-content">
+          ${post.content}
+        </div>
+        <div class="post-detail-tags">
+          ${post.tags.map(t => `<a href="index.html?tag=${encodeURIComponent(t)}"><span class="tag-badge">${t}</span></a>`).join('')}
+        </div>
+      `;
+    }
+
+    init();
+  </script>
+</body>
+</html>
