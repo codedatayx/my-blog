@@ -1,5 +1,6 @@
 .vercel
-.env
+backend/.env
 data/memory.db
 redis-data/
 __pycache__/
+backend/__pycache__/

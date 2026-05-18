@@ -8,11 +8,11 @@ services:
     restart: unless-stopped
 
   backend:
-    build: ./backend
+    build: .
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/app/data
+      - ../data:/app/data
       - ./soul.md:/app/soul.md
     env_file:
       - .env
