@@ -29,6 +29,51 @@
       color: var(--primary);
       text-decoration: underline;
     }
+    /* Password gate */
+    .password-gate {
+      max-width: 400px;
+      margin: 5rem auto;
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 2.5rem;
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+    .password-gate h2 {
+      font-size: 1.4rem;
+      color: var(--primary);
+      margin-bottom: 0.5rem;
+    }
+    .password-gate p {
+      font-size: 0.9rem;
+      color: var(--text-light);
+      margin-bottom: 1.5rem;
+    }
+    .password-gate .pw-input-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .password-gate .pw-input-row input {
+      flex: 1;
+      padding: 0.6rem 0.85rem;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 1rem;
+      font-family: inherit;
+      color: var(--text);
+      background: #fff;
+      outline: none;
+    }
+    .password-gate .pw-input-row input:focus {
+      border-color: var(--primary);
+    }
+    .password-gate .pw-error {
+      color: #c05845;
+      font-size: 0.85rem;
+      min-height: 1.2em;
+    }
+    }
     .form-group {
       margin-bottom: 1rem;
     }
@@ -358,7 +403,18 @@
   </nav>
 
   <div class="container">
-    <!-- Login -->
+    <!-- Password Gate -->
+    <div id="passwordGate" class="password-gate">
+      <h2>管理员验证</h2>
+      <p>请输入管理密码以访问后台</p>
+      <div class="pw-input-row">
+        <input type="password" id="pwInput" placeholder="输入密码" autocomplete="off" onkeydown="if(event.key==='Enter')verifyPassword()">
+        <button class="btn btn-primary" onclick="verifyPassword()">确认</button>
+      </div>
+      <div class="pw-error" id="pwError"></div>
+    </div>
+
+    <!-- Login (GitHub Token) -->
     <div id="loginView" class="admin-login" style="display:none;">
       <h2>🔐 管理后台</h2>
       <p>请输入你的 <a href="https://github.com/settings/tokens/new?scopes=repo&description=blog-admin" target="_blank">GitHub Token</a> 来管理博客文章。</p>
@@ -458,11 +514,42 @@
     let currentTags = [];
 
     // ========== Init ==========
-    function init() {
+    const PW_HASH = '100aa3a6a354ebce7f243b43ea874981a1efd16aee6b9db5df8414835277b66b';
+
+    async function sha256(str) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function verifyPassword() {
+      const input = document.getElementById('pwInput').value;
+      const hash = await sha256(input);
+      if (hash === PW_HASH) {
+        sessionStorage.setItem('admin_authed', '1');
+        document.getElementById('passwordGate').style.display = 'none';
+        showTokenStep();
+      } else {
+        document.getElementById('pwError').textContent = '密码错误，请重试';
+        document.getElementById('pwInput').value = '';
+        document.getElementById('pwInput').focus();
+      }
+    }
+
+    function showTokenStep() {
       if (token) {
         showDashboard();
       } else {
         document.getElementById('loginView').style.display = 'block';
+      }
+    }
+
+    function init() {
+      if (sessionStorage.getItem('admin_authed') === '1') {
+        document.getElementById('passwordGate').style.display = 'none';
+        showTokenStep();
+      } else {
+        document.getElementById('passwordGate').style.display = 'block';
+        document.getElementById('pwInput').focus();
       }
       setupTagInput();
       setupUpload();
@@ -480,8 +567,12 @@
     function doLogout() {
       token = '';
       localStorage.removeItem('gh_token');
-      document.getElementById('loginView').style.display = 'block';
+      sessionStorage.removeItem('admin_authed');
       document.getElementById('dashboardView').style.display = 'none';
+      document.getElementById('loginView').style.display = 'none';
+      document.getElementById('passwordGate').style.display = 'block';
+      document.getElementById('pwInput').value = '';
+      document.getElementById('pwError').textContent = '';
     }
 
     // ========== API ==========
