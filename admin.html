@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理后台 - 我的博客</title>
+  <link rel="stylesheet" href="static/css/style.css">
+  <style>
+    .admin-login {
+      max-width: 480px;
+      margin: 3rem auto;
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 2rem 2.5rem;
+      box-shadow: var(--shadow);
+    }
+    .admin-login h2 {
+      font-size: 1.3rem;
+      color: var(--primary);
+      margin-bottom: 1rem;
+    }
+    .admin-login p {
+      font-size: 0.9rem;
+      color: var(--text-light);
+      margin-bottom: 1rem;
+      line-height: 1.6;
+    }
+    .admin-login a {
+      color: var(--primary);
+      text-decoration: underline;
+    }
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    .form-group label {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.3rem;
+    }
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      color: var(--text);
+      background: #fff;
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    .form-group textarea {
+      min-height: 200px;
+      resize: vertical;
+      font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    .form-group .hint {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+    }
+    .btn {
+      display: inline-block;
+      padding: 0.5rem 1.25rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: var(--primary-light);
+    }
+    .btn-danger {
+      background: #e74c3c;
+      color: #fff;
+    }
+    .btn-danger:hover {
+      background: #c0392b;
+    }
+    .btn-outline {
+      background: transparent;
+      border: 1.5px solid var(--border);
+      color: var(--text-light);
+    }
+    .btn-outline:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+    .btn-sm {
+      padding: 0.3rem 0.8rem;
+      font-size: 0.82rem;
+    }
+
+    /* Dashboard */
+    .admin-dashboard {
+      max-width: 780px;
+      margin: 2rem auto;
+    }
+    .admin-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+    .admin-header h2 {
+      font-size: 1.4rem;
+      color: var(--primary);
+    }
+    .admin-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    /* Post List */
+    .admin-post-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .admin-post-item {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .admin-post-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .admin-post-info h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.2rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .admin-post-info .meta {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+    .admin-post-btns {
+      display: flex;
+      gap: 0.4rem;
+      flex-shrink: 0;
+    }
+
+    /* Editor */
+    .editor-card {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 2rem 2.5rem;
+      box-shadow: var(--shadow);
+    }
+    .editor-card h2 {
+      font-size: 1.3rem;
+      color: var(--primary);
+      margin-bottom: 1.5rem;
+    }
+    .editor-btns {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+    }
+
+    /* Status */
+    .status-msg {
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+      display: none;
+    }
+    .status-msg.success {
+      display: block;
+      background: #e8f5e9;
+      color: #2d6a4f;
+    }
+    .status-msg.error {
+      display: block;
+      background: #fce4ec;
+      color: #c62828;
+    }
+    .status-msg.loading {
+      display: block;
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    .tag-input-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      padding: 0.4rem 0.6rem;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      min-height: 38px;
+      cursor: text;
+      transition: border-color 0.2s;
+    }
+    .tag-input-wrap:focus-within {
+      border-color: var(--primary);
+    }
+    .tag-input-wrap .tag-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.15rem 0.5rem;
+      background: var(--primary-bg);
+      color: var(--primary);
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    .tag-item .remove-tag {
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      opacity: 0.7;
+    }
+    .tag-item .remove-tag:hover {
+      opacity: 1;
+    }
+    .tag-input-wrap input {
+      border: none;
+      outline: none;
+      font-size: 0.9rem;
+      flex: 1;
+      min-width: 80px;
+      padding: 0.15rem 0;
+      font-family: inherit;
+    }
+
+    /* Confirm dialog */
+    .confirm-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+    }
+    .confirm-overlay.show { display: flex; }
+    .confirm-box {
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 1.5rem 2rem;
+      max-width: 400px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+      text-align: center;
+    }
+    .confirm-box p {
+      margin-bottom: 1.25rem;
+      font-size: 1rem;
+    }
+    .confirm-box .btns {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+    }
+
+    @media (max-width: 640px) {
+      .editor-card { padding: 1.25rem; }
+      .admin-post-item { flex-direction: column; align-items: flex-start; }
+      .admin-post-btns { width: 100%; }
+      .admin-post-btns .btn { flex: 1; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="index.html" class="navbar-brand">我的博客</a>
+      <ul class="navbar-links">
+        <li><a href="index.html">首页</a></li>
+        <li><a href="tags.html">标签</a></li>
+        <li><a href="about.html">关于我</a></li>
+        <li><a href="admin.html" class="active">管理</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- Login -->
+    <div id="loginView" class="admin-login" style="display:none;">
+      <h2>🔐 管理后台</h2>
+      <p>请输入你的 <a href="https://github.com/settings/tokens/new?scopes=repo&description=blog-admin" target="_blank">GitHub Token</a> 来管理博客文章。</p>
+      <div class="form-group">
+        <label>GitHub Token</label>
+        <input type="password" id="tokenInput" placeholder="ghp_xxxxxxxxxxxx">
+        <p class="hint">Token 需要 repo 权限。点击上方链接可直接创建。</p>
+      </div>
+      <button class="btn btn-primary" onclick="doLogin()">登录</button>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboardView" class="admin-dashboard" style="display:none;">
+      <div class="admin-header">
+        <h2>📝 文章管理</h2>
+        <div class="admin-actions">
+          <button class="btn btn-outline btn-sm" onclick="doLogout()">退出</button>
+          <button class="btn btn-primary btn-sm" onclick="showEditor()">+ 新建文章</button>
+        </div>
+      </div>
+      <div id="statusMsg" class="status-msg"></div>
+      <div id="adminPostList" class="admin-post-list"></div>
+    </div>
+
+    <!-- Editor -->
+    <div id="editorView" style="display:none;">
+      <div class="editor-card">
+        <h2 id="editorTitle">新建文章</h2>
+        <div id="editorStatus" class="status-msg"></div>
+        <div class="form-group">
+          <label>标题</label>
+          <input type="text" id="editTitle" placeholder="文章标题">
+        </div>
+        <div class="form-group">
+          <label>摘要</label>
+          <input type="text" id="editSummary" placeholder="一句话描述文章内容">
+        </div>
+        <div class="form-group">
+          <label>标签</label>
+          <div class="tag-input-wrap" id="tagInputWrap" onclick="document.getElementById('tagInput').focus()">
+            <input type="text" id="tagInput" placeholder="输入标签后回车">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>正文内容</label>
+          <textarea id="editContent" placeholder="在这里写文章正文，支持 HTML 标签"></textarea>
+          <p class="hint">支持 HTML 标签：&lt;p&gt; &lt;h3&gt; &lt;pre&gt;&lt;code&gt; &lt;ul&gt; &lt;li&gt; 等</p>
+        </div>
+        <div class="editor-btns">
+          <button class="btn btn-primary" onclick="savePost()">保存</button>
+          <button class="btn btn-outline" onclick="cancelEditor()">取消</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Dialog -->
+  <div class="confirm-overlay" id="confirmDialog">
+    <div class="confirm-box">
+      <p id="confirmText">确定要删除这篇文章吗？</p>
+      <div class="btns">
+        <button class="btn btn-danger" id="confirmYes">确定删除</button>
+        <button class="btn btn-outline" onclick="closeConfirm()">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <p>&copy; 2026 我的博客 · 管理后台</p>
+  </footer>
+
+  <script>
+    const OWNER = 'codedatayx';
+    const REPO = 'my-blog';
+    const FILE_PATH = 'data/posts.json';
+    const API = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`;
+
+    let token = localStorage.getItem('gh_token') || '';
+    let posts = [];
+    let fileSha = '';
+    let editingId = null;
+    let currentTags = [];
+
+    // ========== Init ==========
+    function init() {
+      if (token) {
+        showDashboard();
+      } else {
+        document.getElementById('loginView').style.display = 'block';
+      }
+      setupTagInput();
+    }
+
+    // ========== Auth ==========
+    function doLogin() {
+      token = document.getElementById('tokenInput').value.trim();
+      if (!token) return;
+      localStorage.setItem('gh_token', token);
+      showDashboard();
+    }
+
+    function doLogout() {
+      token = '';
+      localStorage.removeItem('gh_token');
+      document.getElementById('loginView').style.display = 'block';
+      document.getElementById('dashboardView').style.display = 'none';
+    }
+
+    // ========== API ==========
+    async function apiFetch(url, options = {}) {
+      const res = await fetch(url, {
+        ...options,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github+json',
+          ...options.headers
+        }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+      return res;
+    }
+
+    async function loadPosts() {
+      const res = await apiFetch(API);
+      const data = await res.json();
+      fileSha = data.sha;
+      posts = JSON.parse(atob(data.content));
+      posts.sort((a, b) => b.date.localeCompare(a.date));
+    }
+
+    async function saveToGitHub(newPosts) {
+      const content = btoa(unescape(encodeURIComponent(JSON.stringify(newPosts, null, 2))));
+      await apiFetch(API, {
+        method: 'PUT',
+        body: JSON.stringify({
+          message: `blog: update posts`,
+          content: content,
+          sha: fileSha
+        })
+      });
+    }
+
+    // ========== Dashboard ==========
+    async function showDashboard() {
+      document.getElementById('loginView').style.display = 'none';
+      document.getElementById('editorView').style.display = 'none';
+      document.getElementById('dashboardView').style.display = 'block';
+      showStatus('statusMsg', '加载中...', 'loading');
+      try {
+        await loadPosts();
+        hideStatus('statusMsg');
+        renderAdminList();
+      } catch (e) {
+        if (e.message.includes('401') || e.message.includes('Bad credentials')) {
+          showStatus('statusMsg', 'Token 无效或已过期，请重新登录', 'error');
+          doLogout();
+        } else {
+          showStatus('statusMsg', '加载失败: ' + e.message, 'error');
+        }
+      }
+    }
+
+    function renderAdminList() {
+      const container = document.getElementById('adminPostList');
+      if (posts.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>还没有文章，点击「新建文章」开始吧</p></div>';
+        return;
+      }
+      container.innerHTML = posts.map(post => `
+        <div class="admin-post-item">
+          <div class="admin-post-info">
+            <h3>${escHtml(post.title)}</h3>
+            <div class="meta">
+              <span>${post.date}</span>
+              <span>${post.tags.map(t => `<span class="tag-badge">${escHtml(t)}</span>`).join(' ')}</span>
+            </div>
+          </div>
+          <div class="admin-post-btns">
+            <button class="btn btn-outline btn-sm" onclick="editPost('${post.id}')">编辑</button>
+            <button class="btn btn-danger btn-sm" onclick="confirmDelete('${post.id}', '${escHtml(post.title)}')">删除</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // ========== Editor ==========
+    function showEditor(post) {
+      editingId = post ? post.id : null;
+      document.getElementById('editorTitle').textContent = post ? '编辑文章' : '新建文章';
+      document.getElementById('editTitle').value = post ? post.title : '';
+      document.getElementById('editSummary').value = post ? post.summary : '';
+      document.getElementById('editContent').value = post ? post.content : '';
+
+      currentTags = post ? [...post.tags] : [];
+      renderTagInput();
+
+      document.getElementById('dashboardView').style.display = 'none';
+      document.getElementById('editorView').style.display = 'block';
+      hideStatus('editorStatus');
+    }
+
+    function editPost(id) {
+      const post = posts.find(p => p.id === id);
+      if (post) showEditor(post);
+    }
+
+    function cancelEditor() {
+      document.getElementById('editorView').style.display = 'none';
+      document.getElementById('dashboardView').style.display = 'block';
+    }
+
+    async function savePost() {
+      const title = document.getElementById('editTitle').value.trim();
+      const summary = document.getElementById('editSummary').value.trim();
+      const content = document.getElementById('editContent').value.trim();
+
+      if (!title) { showStatus('editorStatus', '请输入标题', 'error'); return; }
+      if (!content) { showStatus('editorStatus', '请输入正文内容', 'error'); return; }
+
+      showStatus('editorStatus', '保存中...', 'loading');
+
+      try {
+        if (editingId) {
+          const idx = posts.findIndex(p => p.id === editingId);
+          if (idx !== -1) {
+            posts[idx].title = title;
+            posts[idx].summary = summary;
+            posts[idx].content = content;
+            posts[idx].tags = [...currentTags];
+          }
+        } else {
+          const id = slugify(title) + '-' + Date.now();
+          const today = new Date().toISOString().split('T')[0];
+          posts.push({ id, title, date: today, summary, content, tags: [...currentTags] });
+        }
+
+        await saveToGitHub(posts);
+        showStatus('editorStatus', '保存成功！页面将在 1-2 分钟后自动更新', 'success');
+        setTimeout(() => showDashboard(), 1500);
+      } catch (e) {
+        showStatus('editorStatus', '保存失败: ' + e.message, 'error');
+      }
+    }
+
+    // ========== Delete ==========
+    function confirmDelete(id, title) {
+      document.getElementById('confirmText').textContent = `确定要删除「${title}」吗？`;
+      document.getElementById('confirmDialog').classList.add('show');
+      document.getElementById('confirmYes').onclick = () => deletePost(id);
+    }
+
+    function closeConfirm() {
+      document.getElementById('confirmDialog').classList.remove('show');
+    }
+
+    async function deletePost(id) {
+      closeConfirm();
+      showStatus('statusMsg', '删除中...', 'loading');
+      try {
+        posts = posts.filter(p => p.id !== id);
+        await saveToGitHub(posts);
+        showStatus('statusMsg', '已删除', 'success');
+        renderAdminList();
+      } catch (e) {
+        showStatus('statusMsg', '删除失败: ' + e.message, 'error');
+      }
+    }
+
+    // ========== Tags Input ==========
+    function setupTagInput() {
+      document.getElementById('tagInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const val = this.value.trim();
+          if (val && !currentTags.includes(val)) {
+            currentTags.push(val);
+            renderTagInput();
+          }
+          this.value = '';
+        }
+        if (e.key === 'Backspace' && !this.value && currentTags.length) {
+          currentTags.pop();
+          renderTagInput();
+        }
+      });
+    }
+
+    function renderTagInput() {
+      const wrap = document.getElementById('tagInputWrap');
+      const input = document.getElementById('tagInput');
+      wrap.querySelectorAll('.tag-item').forEach(el => el.remove());
+      currentTags.forEach((tag, i) => {
+        const el = document.createElement('span');
+        el.className = 'tag-item';
+        el.innerHTML = `${escHtml(tag)} <span class="remove-tag" onclick="removeTag(${i})">&times;</span>`;
+        wrap.insertBefore(el, input);
+      });
+    }
+
+    function removeTag(i) {
+      currentTags.splice(i, 1);
+      renderTagInput();
+    }
+
+    // ========== Helpers ==========
+    function escHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function slugify(s) {
+      return s.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').replace(/^-|-$/g, '');
+    }
+
+    function showStatus(id, msg, type) {
+      const el = document.getElementById(id);
+      el.textContent = msg;
+      el.className = 'status-msg ' + type;
+    }
+
+    function hideStatus(id) {
+      const el = document.getElementById(id);
+      el.className = 'status-msg';
+    }
+
+    init();
+  </script>
+</body>
+</html>
