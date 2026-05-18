@@ -166,6 +166,7 @@
 
   async function chatRequest(messages) {
     const apiKey = atob(_k[0]);
+    console.log('[ChatBot] Request:', { model: 'deepseek-chat', msgCount: messages.length });
     const res = await fetch(DEEPSEEK_API, {
       method: 'POST',
       headers: {
@@ -179,11 +180,14 @@
         max_tokens: 600
       })
     });
+    console.log('[ChatBot] Response status:', res.status);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      console.error('[ChatBot] API error:', err);
       throw new Error(err.error?.message || `HTTP ${res.status}`);
     }
     const data = await res.json();
+    console.log('[ChatBot] Reply:', data.choices?.[0]?.message?.content?.substring(0, 50));
     return data.choices?.[0]?.message?.content || '抱歉，没有收到回复。';
   }
 
@@ -196,7 +200,7 @@
     const systemPrompt = `${soul}${postContext}`;
     chatHistory.push({ role: 'user', content: question });
 
-    const botDiv = addBotMessage('');
+    const botDiv = addBotMessage('<em style="color:#b0a898">正在思考...</em>');
 
     try {
       const reply = await chatRequest([
@@ -206,6 +210,7 @@
       chatHistory.push({ role: 'assistant', content: reply });
       await new Promise(resolve => typeText(botDiv, reply, resolve));
     } catch (e) {
+      console.error('[ChatBot]', e);
       botDiv.innerHTML = '出错了: ' + e.message;
     }
   }
@@ -250,7 +255,7 @@
     const systemPrompt = `${soul}\n\n当前这篇文章：「${postTitle}」\n内容摘要：${postContent}`;
     inlineHistory.push({ role: 'user', content: question });
 
-    const botDiv = inlineAddBot('');
+    const botDiv = inlineAddBot('<em style="color:#b0a898">正在思考...</em>');
 
     try {
       const reply = await chatRequest([
