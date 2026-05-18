@@ -415,7 +415,7 @@
         <div class="form-group">
           <label>正文内容</label>
           <textarea id="editContent" placeholder="在这里写文章正文，支持 HTML 标签"></textarea>
-          <p class="hint">支持 HTML 标签：&lt;p&gt; &lt;h3&gt; &lt;pre&gt;&lt;code&gt; &lt;ul&gt; &lt;li&gt; &lt;img&gt; 等</p>
+          <p class="hint">支持 HTML 标签 · 可直接 Ctrl+V 粘贴截图或复制的图片</p>
         </div>
         <div class="editor-btns">
           <button class="btn btn-primary" onclick="savePost()">保存</button>
@@ -461,6 +461,7 @@
       }
       setupTagInput();
       setupUpload();
+      setupPaste();
     }
 
     // ========== Auth ==========
@@ -710,31 +711,66 @@
       }
     }
 
-    async function uploadImage(file) {
-      const statusEl = document.getElementById('uploadStatus');
-      const previewEl = document.getElementById('uploadPreview');
+    // ========== Paste Image ==========
+    function setupPaste() {
+      const textarea = document.getElementById('editContent');
+      textarea.addEventListener('paste', async (e) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
 
+        for (const item of items) {
+          if (item.type.startsWith('image/')) {
+            e.preventDefault();
+            const file = item.getAsFile();
+            if (file) {
+              const ext = file.type.split('/')[1] || 'png';
+              const renamedFile = new File([file], `paste-${Date.now()}.${ext}`, { type: file.type });
+              showStatus('editorStatus', '粘贴图片上传中...', 'loading');
+              try {
+                const rawUrl = await uploadImageToGithub(renamedFile);
+                const tag = `<img src="${rawUrl}" alt="粘贴的图片">`;
+                const pos = textarea.selectionStart;
+                const before = textarea.value.substring(0, pos);
+                const after = textarea.value.substring(pos);
+                textarea.value = before + '\n' + tag + '\n' + after;
+                textarea.focus();
+                textarea.selectionStart = textarea.selectionEnd = pos + tag.length + 2;
+                hideStatus('editorStatus');
+              } catch (err) {
+                showStatus('editorStatus', '图片上传失败: ' + err.message, 'error');
+              }
+            }
+            break;
+          }
+        }
+      });
+    }
+
+    async function uploadImageToGithub(file) {
       const ext = file.name.split('.').pop().toLowerCase();
       const date = new Date().toISOString().split('T')[0];
       const filename = `static/images/${date}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`;
 
+      const base64 = await fileToBase64(file);
+      const content = base64.split(',')[1];
+
+      await apiFetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${filename}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          message: `blog: upload image ${file.name}`,
+          content: content
+        })
+      });
+
+      return `https://raw.githubusercontent.com/${OWNER}/${REPO}/main/${filename}`;
+    }
+
+    async function uploadImage(file) {
+      const previewEl = document.getElementById('uploadPreview');
       showStatus('uploadStatus', `上传中: ${file.name}...`, 'loading');
-
       try {
-        const base64 = await fileToBase64(file);
-        const content = base64.split(',')[1];
-
-        await apiFetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${filename}`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            message: `blog: upload image ${file.name}`,
-            content: content
-          })
-        });
-
-        const rawUrl = `https://raw.githubusercontent.com/${OWNER}/${REPO}/main/${filename}`;
+        const rawUrl = await uploadImageToGithub(file);
         const htmlTag = `<img src="${rawUrl}" alt="${escHtml(file.name)}">`;
-
         const preview = document.createElement('div');
         preview.className = 'uploaded-img';
         preview.innerHTML = `
@@ -742,7 +778,6 @@
           <button class="copy-link" onclick="insertImage('${htmlTag.replace(/'/g, "\\'")}')">插入</button>
         `;
         previewEl.appendChild(preview);
-
         hideStatus('uploadStatus');
       } catch (e) {
         showStatus('uploadStatus', '上传失败: ' + e.message, 'error');
