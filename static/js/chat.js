@@ -3,7 +3,7 @@
 (function () {
   // Backend API (set to empty string when running locally without backend)
   // When backend is running, set to 'http://localhost:8000'
-  const API_BASE = window.CHAT_API_BASE || 'http://localhost:8000';
+  const API_BASE = window.CHAT_API_BASE || 'https://formerly-index-collected-bold.trycloudflare.com';
   const POSTS_FILE = 'data/posts.json';
 
   let posts = [];
