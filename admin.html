@@ -435,7 +435,8 @@
       const res = await apiFetch(API);
       const data = await res.json();
       fileSha = data.sha;
-      posts = JSON.parse(atob(data.content));
+      const decoded = decodeURIComponent(escape(atob(data.content)));
+      posts = JSON.parse(decoded);
       posts.sort((a, b) => b.date.localeCompare(a.date));
     }
 
