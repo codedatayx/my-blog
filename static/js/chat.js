@@ -2,7 +2,7 @@
 
 (function () {
   // API key is base64 encoded, decoded at runtime
-  const _k = ['c2stZTE5MGUzZTM1ZDA4NDdiZTk3MzlmNTBmMzNlZTdmMGI='];
+  const _k = ['c2stYWIwNDIwZThlMzA2NDU1Y2I3ZGM3ZjEyODViOGMwNDU='];
   const DEEPSEEK_API = 'https://api.deepseek.com/chat/completions';
   const POSTS_FILE = 'data/posts.json';
 
