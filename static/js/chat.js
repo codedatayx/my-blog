@@ -82,6 +82,16 @@
         send();
       }
     });
+    // Inline chat input (post page)
+    const inlineInput = document.getElementById('inlineChatInput');
+    if (inlineInput) {
+      inlineInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          inlineSend();
+        }
+      });
+    }
   }
 
   // ========== Toggle ==========
@@ -162,6 +172,7 @@
           'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
+          model: 'deepseek-chat',
           messages: [
             { role: 'system', content: systemPrompt },
             ...chatHistory.slice(-10)
@@ -208,8 +219,106 @@
     ask(text);
   }
 
+  // ========== Inline Chat (post page) ==========
+  let inlineHistory = [];
+
+  function inlineAddBot(text) {
+    const container = document.getElementById('inlineChatMessages');
+    if (!container) return;
+    const div = document.createElement('div');
+    div.className = 'chat-msg bot';
+    div.innerHTML = text;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function inlineAddUser(text) {
+    const container = document.getElementById('inlineChatMessages');
+    if (!container) return;
+    const div = document.createElement('div');
+    div.className = 'chat-msg user';
+    div.textContent = text;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function inlineAddTyping() {
+    const container = document.getElementById('inlineChatMessages');
+    if (!container) return;
+    const div = document.createElement('div');
+    div.className = 'chat-msg typing';
+    div.id = 'inlineTyping';
+    div.textContent = '正在思考...';
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function inlineRemoveTyping() {
+    const el = document.getElementById('inlineTyping');
+    if (el) el.remove();
+  }
+
+  async function inlineAsk(question) {
+    inlineAddUser(question);
+    document.getElementById('inlineChatSuggestions').style.display = 'none';
+    document.getElementById('inlineChatInput').value = '';
+
+    inlineAddTyping();
+
+    // Get current post context from page title
+    const postTitle = document.querySelector('.post-detail-header h1')?.textContent || '';
+    const postContent = document.querySelector('.post-detail-content')?.textContent?.substring(0, 500) || '';
+
+    const systemPrompt = `${soul}\n\n当前这篇文章：「${postTitle}」\n内容摘要：${postContent}`;
+
+    inlineHistory.push({ role: 'user', content: question });
+
+    try {
+      const apiKey = atob(_k[0]);
+      const res = await fetch(DEEPSEEK_API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...inlineHistory.slice(-8)
+          ],
+          temperature: 0.8,
+          max_tokens: 600
+        })
+      });
+
+      inlineRemoveTyping();
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error?.message || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const reply = data.choices?.[0]?.message?.content || '抱歉，没有收到回复。';
+      inlineHistory.push({ role: 'assistant', content: reply });
+      inlineAddBot(reply);
+    } catch (e) {
+      inlineRemoveTyping();
+      inlineAddBot('出错了: ' + e.message);
+    }
+  }
+
+  function inlineSend() {
+    const input = document.getElementById('inlineChatInput');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    inlineAsk(text);
+  }
+
   // ========== Expose ==========
-  window.ChatBot = { toggle, ask, send };
+  window.ChatBot = { toggle, ask, send, inlineAsk, inlineSend };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initChat);
