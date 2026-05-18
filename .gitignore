@@ -1,1 +1,4 @@
 .vercel
+data/memory.db
+redis-data/
+__pycache__/

@@ -1,28 +1,32 @@
 // ========== Blog AI Chat - Digital Twin ==========
 
 (function () {
-  const _k = ['c2stYWIwNDIwZThlMzA2NDU1Y2I3ZGM3ZjEyODViOGMwNDU='];
-  const DEEPSEEK_API = 'https://api.deepseek.com/chat/completions';
+  // Backend API (set to empty string when running locally without backend)
+  // When backend is running, set to 'http://localhost:8000'
+  const API_BASE = window.CHAT_API_BASE || '';
   const POSTS_FILE = 'data/posts.json';
-  const SOUL_FILE = 'soul.md';
 
   let posts = [];
-  let soul = '';
   let chatHistory = [];
   let isOpen = false;
+
+  // Session ID - persisted in localStorage
+  function getSessionId() {
+    let id = localStorage.getItem('chat_session_id');
+    if (!id) {
+      id = 's_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+      localStorage.setItem('chat_session_id', id);
+    }
+    return id;
+  }
 
   // ========== Init ==========
   async function initChat() {
     try {
-      const [postsRes, soulRes] = await Promise.all([
-        fetch(POSTS_FILE),
-        fetch(SOUL_FILE)
-      ]);
-      posts = await postsRes.json();
-      soul = await soulRes.text();
+      const res = await fetch(POSTS_FILE);
+      posts = await res.json();
     } catch (e) {
       posts = [];
-      soul = '你是杨轩的博客AI助手。';
     }
 
     injectHTML();
@@ -34,10 +38,6 @@
     css.rel = 'stylesheet';
     css.href = 'static/css/chat.css';
     document.head.appendChild(css);
-
-    // Extract the intro line from soul.md
-    const introMatch = soul.match(/我是杨轩.*不是什么AI模型/);
-    const intro = introMatch ? introMatch[0] : '我就是杨轩本人，不是什么AI模型。';
 
     const html = `
       <button class="chat-fab" id="chatFab" title="和我聊聊">&#128172;</button>
@@ -51,7 +51,7 @@
         </div>
 
         <div class="chat-messages" id="chatMessages">
-          <div class="chat-msg system">${intro}</div>
+          <div class="chat-msg system">我是杨轩，一个真实的开发者，不是什么AI模型。随便问，聊聊技术、工作、生活都行。</div>
         </div>
 
         <div class="chat-suggestions" id="chatSuggestions">
@@ -82,7 +82,6 @@
         send();
       }
     });
-    // Inline chat input (post page)
     const inlineInput = document.getElementById('inlineChatInput');
     if (inlineInput) {
       inlineInput.addEventListener('keydown', (e) => {
@@ -104,7 +103,7 @@
     }
   }
 
-  // ========== Chat ==========
+  // ========== Chat Helpers ==========
   function addMessage(text, role) {
     const container = document.getElementById('chatMessages');
     const div = document.createElement('div');
@@ -125,23 +124,11 @@
     return div;
   }
 
-  function buildPostContext() {
-    if (posts.length === 0) return '';
-    const summaries = posts.map(p => {
-      const tags = p.tags.length ? ` [${p.tags.join(', ')}]` : '';
-      const plain = p.content.replace(/<[^>]+>/g, '').substring(0, 200);
-      return `- "${p.title}" (${p.date})${tags}\n  ${p.summary}`;
-    });
-    return `\n\n我写过的博客文章：\n${summaries.join('\n')}`;
-  }
-
-  // ========== Typing Animation ==========
   function typeText(el, text, onDone) {
     let i = 0;
     const container = el.parentElement;
     function tick() {
       if (i < text.length) {
-        // Auto-link article titles
         let formatted = text.substring(0, i + 1);
         posts.forEach(p => {
           if (formatted.includes(p.title)) {
@@ -154,7 +141,6 @@
         el.innerHTML = formatted;
         container.scrollTop = container.scrollHeight;
         i++;
-        // Faster for ASCII, slower for CJK
         const delay = text.charCodeAt(i - 1) > 127 ? 35 : 18;
         setTimeout(tick, delay);
       } else {
@@ -164,55 +150,121 @@
     tick();
   }
 
-  async function chatRequest(messages) {
-    const apiKey = atob(_k[0]);
-    console.log('[ChatBot] Request:', { model: 'deepseek-chat', msgCount: messages.length });
-    const res = await fetch(DEEPSEEK_API, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages,
-        temperature: 0.8,
-        max_tokens: 600
-      })
-    });
-    console.log('[ChatBot] Response status:', res.status);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.error('[ChatBot] API error:', err);
-      throw new Error(err.error?.message || `HTTP ${res.status}`);
+  // ========== Backend API Call (SSE Streaming) ==========
+  async function chatStream(question, browserHistory, onToken, onDone, onError) {
+    const sessionId = getSessionId();
+
+    if (API_BASE) {
+      // Use backend API with streaming
+      try {
+        const res = await fetch(`${API_BASE}/api/chat/stream`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: sessionId,
+            message: question,
+            browser_history: browserHistory,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `HTTP ${res.status}`);
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullReply = '';
+        let done = false;
+
+        // Background reader
+        (async () => {
+          try {
+            while (true) {
+              const { done: streamDone, value } = await reader.read();
+              if (streamDone) { done = true; break; }
+              buffer += decoder.decode(value, { stream: true });
+            }
+          } catch (_) { done = true; }
+        })();
+
+        // Poll for tokens
+        await new Promise((resolve) => {
+          const interval = setInterval(() => {
+            const nl = buffer.indexOf('\n');
+            if (nl !== -1) {
+              const lines = buffer.split('\n');
+              buffer = lines.pop();
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith('data:')) continue;
+                const payload = trimmed.slice(5).trim();
+                if (payload === '[DONE]') continue;
+                try {
+                  const obj = JSON.parse(payload);
+                  if (obj.content) {
+                    fullReply += obj.content;
+                    onToken(obj.content, fullReply);
+                  }
+                } catch (_) {}
+              }
+            }
+            if (done) {
+              clearInterval(interval);
+              onDone(fullReply);
+              resolve();
+            }
+          }, 30);
+        });
+      } catch (e) {
+        onError(e);
+      }
+    } else {
+      // Fallback: direct DeepSeek call (no memory)
+      onError(new Error('后端未启动。请运行 docker-compose up 启动后端服务。'));
     }
-    const data = await res.json();
-    console.log('[ChatBot] Reply:', data.choices?.[0]?.message?.content?.substring(0, 50));
-    return data.choices?.[0]?.message?.content || '抱歉，没有收到回复。';
   }
 
+  // ========== Main Chat ==========
   async function ask(question) {
     addMessage(question, 'user');
     document.getElementById('chatSuggestions').style.display = 'none';
     document.getElementById('chatInput').value = '';
 
-    const postContext = buildPostContext();
-    const systemPrompt = `${soul}${postContext}`;
     chatHistory.push({ role: 'user', content: question });
 
     const botDiv = addBotMessage('<em style="color:#b0a898">正在思考...</em>');
 
-    try {
-      const reply = await chatRequest([
-        { role: 'system', content: systemPrompt },
-        ...chatHistory.slice(-10)
-      ]);
-      chatHistory.push({ role: 'assistant', content: reply });
-      await new Promise(resolve => typeText(botDiv, reply, resolve));
-    } catch (e) {
-      console.error('[ChatBot]', e);
-      botDiv.innerHTML = '出错了: ' + e.message;
-    }
+    await chatStream(
+      question,
+      chatHistory.slice(0, -1), // send history without current message
+      (token, full) => {
+        let formatted = full;
+        posts.forEach(p => {
+          if (formatted.includes(p.title)) {
+            formatted = formatted.replace(
+              new RegExp(p.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+              `<a href="post.html?id=${p.id}">${p.title}</a>`
+            );
+          }
+        });
+        botDiv.innerHTML = formatted;
+        const container = document.getElementById('chatMessages');
+        container.scrollTop = container.scrollHeight;
+      },
+      (fullReply) => {
+        chatHistory.push({ role: 'assistant', content: fullReply });
+        // Keep browser history manageable
+        if (chatHistory.length > 20) {
+          chatHistory = chatHistory.slice(-12);
+        }
+      },
+      (e) => {
+        console.error('[ChatBot]', e);
+        botDiv.innerHTML = '出错了: ' + e.message;
+      }
+    );
   }
 
   function send() {
@@ -253,21 +305,31 @@
 
     const postTitle = document.querySelector('.post-detail-header h1')?.textContent || '';
     const postContent = document.querySelector('.post-detail-content')?.textContent?.substring(0, 500) || '';
-    const systemPrompt = `${soul}\n\n当前这篇文章：「${postTitle}」\n内容摘要：${postContent}`;
     inlineHistory.push({ role: 'user', content: question });
 
     const botDiv = inlineAddBot('<em style="color:#b0a898">正在思考...</em>');
 
-    try {
-      const reply = await chatRequest([
-        { role: 'system', content: systemPrompt },
-        ...inlineHistory.slice(-8)
-      ]);
-      inlineHistory.push({ role: 'assistant', content: reply });
-      await new Promise(resolve => typeText(botDiv, reply, resolve));
-    } catch (e) {
-      botDiv.innerHTML = '出错了: ' + e.message;
-    }
+    // For inline chat, send post context as part of the message
+    const enrichedQuestion = `[关于文章「${postTitle}」] ${question}`;
+
+    await chatStream(
+      enrichedQuestion,
+      inlineHistory.slice(0, -1),
+      (token, full) => {
+        botDiv.innerHTML = full;
+        const container = document.getElementById('inlineChatMessages');
+        container.scrollTop = container.scrollHeight;
+      },
+      (fullReply) => {
+        inlineHistory.push({ role: 'assistant', content: fullReply });
+        if (inlineHistory.length > 16) {
+          inlineHistory = inlineHistory.slice(-10);
+        }
+      },
+      (e) => {
+        botDiv.innerHTML = '出错了: ' + e.message;
+      }
+    );
   }
 
   function inlineSend() {

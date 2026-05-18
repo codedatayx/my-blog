@@ -1,0 +1,27 @@
+services:
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./soul.md:/app/soul.md
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DEEPSEEK_API_KEY=sk-ab0420e8e306455cb7dc7f1285b8c045
+      - DB_PATH=/app/data/memory.db
+      - SOUL_PATH=/app/soul.md
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+volumes:
+  redis-data:
