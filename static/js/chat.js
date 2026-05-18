@@ -163,32 +163,68 @@
       const decoder = new TextDecoder();
       let buffer = '';
       let fullReply = '';
+      let done = false;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        const lines = buffer.split('\n');
-        buffer = lines.pop(); // keep incomplete line in buffer
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith('data:')) continue;
-          const payload = trimmed.slice(5).trim();
-          if (payload === '[DONE]') continue;
-          try {
-            const json = JSON.parse(payload);
-            const delta = json.choices?.[0]?.delta?.content;
-            if (delta) {
-              fullReply += delta;
-              onToken(delta, fullReply);
-            }
-          } catch (_) {}
+      // Read stream in background
+      (async () => {
+        try {
+          while (true) {
+            const { done: streamDone, value } = await reader.read();
+            if (streamDone) { done = true; break; }
+            buffer += decoder.decode(value, { stream: true });
+          }
+        } catch (_) {
+          done = true;
         }
-      }
+      })();
 
-      onDone(fullReply);
+      // Poll buffer for new tokens
+      await new Promise((resolve) => {
+        const interval = setInterval(() => {
+          // Process complete lines from buffer
+          const newlineIdx = buffer.indexOf('\n');
+          if (newlineIdx !== -1) {
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || !trimmed.startsWith('data:')) continue;
+              const payload = trimmed.slice(5).trim();
+              if (payload === '[DONE]') continue;
+              try {
+                const json = JSON.parse(payload);
+                const delta = json.choices?.[0]?.delta?.content;
+                if (delta) {
+                  fullReply += delta;
+                  onToken(delta, fullReply);
+                }
+              } catch (_) {}
+            }
+          }
+          if (done) {
+            // Process remaining buffer
+            if (buffer.trim()) {
+              const trimmed = buffer.trim();
+              if (trimmed.startsWith('data:')) {
+                const payload = trimmed.slice(5).trim();
+                if (payload !== '[DONE]') {
+                  try {
+                    const json = JSON.parse(payload);
+                    const delta = json.choices?.[0]?.delta?.content;
+                    if (delta) {
+                      fullReply += delta;
+                      onToken(delta, fullReply);
+                    }
+                  } catch (_) {}
+                }
+              }
+            }
+            clearInterval(interval);
+            onDone(fullReply);
+            resolve();
+          }
+        }, 30);
+      });
     } catch (e) {
       onError(e);
     }
