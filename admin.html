@@ -254,6 +254,59 @@
       font-family: inherit;
     }
 
+    /* Upload */
+    .upload-area {
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: #faf8f3;
+    }
+    .upload-area:hover,
+    .upload-area.dragover {
+      border-color: var(--primary);
+      background: var(--primary-bg);
+    }
+    .upload-area p {
+      font-size: 0.9rem;
+      color: var(--text-light);
+      margin: 0.25rem 0;
+    }
+    .upload-area a {
+      text-decoration: underline;
+    }
+    .upload-preview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .upload-preview .uploaded-img {
+      position: relative;
+      display: inline-block;
+    }
+    .upload-preview .uploaded-img img {
+      width: 120px;
+      height: 80px;
+      object-fit: cover;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .upload-preview .uploaded-img .copy-link {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 0.7rem;
+      cursor: pointer;
+    }
+
     /* Confirm dialog */
     .confirm-overlay {
       display: none;
@@ -350,9 +403,19 @@
           </div>
         </div>
         <div class="form-group">
+          <label>插入图片</label>
+          <div class="upload-area" id="uploadArea">
+            <input type="file" id="imageInput" accept="image/*" multiple style="display:none;">
+            <p>拖拽图片到此处，或 <a href="javascript:void(0)" onclick="document.getElementById('imageInput').click()">点击选择</a></p>
+            <p class="hint">支持 jpg、png、gif、webp，会自动上传到仓库</p>
+          </div>
+          <div id="uploadStatus" class="status-msg"></div>
+          <div id="uploadPreview" class="upload-preview"></div>
+        </div>
+        <div class="form-group">
           <label>正文内容</label>
           <textarea id="editContent" placeholder="在这里写文章正文，支持 HTML 标签"></textarea>
-          <p class="hint">支持 HTML 标签：&lt;p&gt; &lt;h3&gt; &lt;pre&gt;&lt;code&gt; &lt;ul&gt; &lt;li&gt; 等</p>
+          <p class="hint">支持 HTML 标签：&lt;p&gt; &lt;h3&gt; &lt;pre&gt;&lt;code&gt; &lt;ul&gt; &lt;li&gt; &lt;img&gt; 等</p>
         </div>
         <div class="editor-btns">
           <button class="btn btn-primary" onclick="savePost()">保存</button>
@@ -397,6 +460,7 @@
         document.getElementById('loginView').style.display = 'block';
       }
       setupTagInput();
+      setupUpload();
     }
 
     // ========== Auth ==========
@@ -614,6 +678,94 @@
     function removeTag(i) {
       currentTags.splice(i, 1);
       renderTagInput();
+    }
+
+    // ========== Image Upload ==========
+    function setupUpload() {
+      const area = document.getElementById('uploadArea');
+      const input = document.getElementById('imageInput');
+
+      area.addEventListener('click', (e) => {
+        if (e.target.tagName !== 'A') input.click();
+      });
+
+      area.addEventListener('dragover', (e) => { e.preventDefault(); area.classList.add('dragover'); });
+      area.addEventListener('dragleave', () => area.classList.remove('dragover'));
+      area.addEventListener('drop', (e) => {
+        e.preventDefault();
+        area.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+      });
+
+      input.addEventListener('change', () => {
+        handleFiles(input.files);
+        input.value = '';
+      });
+    }
+
+    async function handleFiles(files) {
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        await uploadImage(file);
+      }
+    }
+
+    async function uploadImage(file) {
+      const statusEl = document.getElementById('uploadStatus');
+      const previewEl = document.getElementById('uploadPreview');
+
+      const ext = file.name.split('.').pop().toLowerCase();
+      const date = new Date().toISOString().split('T')[0];
+      const filename = `static/images/${date}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`;
+
+      showStatus('uploadStatus', `上传中: ${file.name}...`, 'loading');
+
+      try {
+        const base64 = await fileToBase64(file);
+        const content = base64.split(',')[1];
+
+        await apiFetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${filename}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            message: `blog: upload image ${file.name}`,
+            content: content
+          })
+        });
+
+        const rawUrl = `https://raw.githubusercontent.com/${OWNER}/${REPO}/main/${filename}`;
+        const htmlTag = `<img src="${rawUrl}" alt="${escHtml(file.name)}">`;
+
+        const preview = document.createElement('div');
+        preview.className = 'uploaded-img';
+        preview.innerHTML = `
+          <img src="${rawUrl}" alt="${escHtml(file.name)}">
+          <button class="copy-link" onclick="insertImage('${htmlTag.replace(/'/g, "\\'")}')">插入</button>
+        `;
+        previewEl.appendChild(preview);
+
+        hideStatus('uploadStatus');
+      } catch (e) {
+        showStatus('uploadStatus', '上传失败: ' + e.message, 'error');
+      }
+    }
+
+    function insertImage(htmlTag) {
+      const textarea = document.getElementById('editContent');
+      const pos = textarea.selectionStart;
+      const before = textarea.value.substring(0, pos);
+      const after = textarea.value.substring(pos);
+      textarea.value = before + '\n' + htmlTag + '\n' + after;
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = pos + htmlTag.length + 2;
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
     }
 
     // ========== Helpers ==========
