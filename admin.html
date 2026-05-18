@@ -547,6 +547,7 @@
         }
 
         await saveToGitHub(posts);
+        await loadPosts();
         showStatus('editorStatus', '保存成功！页面将在 1-2 分钟后自动更新', 'success');
         setTimeout(() => showDashboard(), 1500);
       } catch (e) {
@@ -571,6 +572,7 @@
       try {
         posts = posts.filter(p => p.id !== id);
         await saveToGitHub(posts);
+        await loadPosts();
         showStatus('statusMsg', '已删除', 'success');
         renderAdminList();
       } catch (e) {
